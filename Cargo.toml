@@ -10,7 +10,12 @@ license = "MIT"
 name = "toknt"
 path = "src/lib.rs"
 
-# Goal 1 ships only the verification harness; the user-facing CLI is Goal 2.
+# The shipped CLI: a thin product surface over the proven counting library.
+[[bin]]
+name = "toknt"
+path = "src/main.rs"
+
+# Goal 1's live verification harness — drives the core over the proof set.
 [[bin]]
 name = "toknt-verify"
 path = "src/bin/toknt-verify.rs"
@@ -37,6 +42,13 @@ anyhow = "1"
 thiserror = "2"
 # sample sha256 fingerprint in verification.json
 sha2 = "0.10"
+# CLI surface: derive-based arg parsing and shell completion generation.
+clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"
+# gitignore-aware recursive directory walking (honors .gitignore unless overridden).
+ignore = "0.4"
+# explicit glob expansion for quoted/unexpanded patterns reaching the binary.
+glob = "0.3"
 
 [dev-dependencies]
 # Load the committed BERT fixture directly to prove the raw (add_special_tokens
