@@ -37,3 +37,8 @@ anyhow = "1"
 thiserror = "2"
 # sample sha256 fingerprint in verification.json
 sha2 = "0.10"
+
+[dev-dependencies]
+# Load the committed BERT fixture directly to prove the raw (add_special_tokens
+# = false) basis omits the [CLS]/[SEP] specials, hermetically (no network).
+tokenizers = "0.23"
