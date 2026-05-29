@@ -5,6 +5,7 @@
 .claude/plans/
 .codex/
 .proxyai/
+.zed/
 
 # dependencies
 node_modules
@@ -369,4 +370,3 @@ Temporary Items
 
 # Note: Cargo.lock is intentionally NOT ignored — this is a binary/CLI crate,
 # so the lockfile is committed for reproducible builds.
-

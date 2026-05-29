@@ -1,0 +1,115 @@
+{
+  "generated_at": "2026-05-29",
+  "sample": {
+    "path": "tests/fixtures/samples/sample.txt",
+    "bytes": 1119,
+    "sha256": "cd39b9ca958952badd64832f8070a68e6e555685085c64746dfe06606f513b02"
+  },
+  "results": [
+    {
+      "model": "o200k_base",
+      "resolved_model": "o200k_base",
+      "strategy": "tiktoken",
+      "encoding": "o200k_base",
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 299
+    },
+    {
+      "model": "claude-opus-4-8",
+      "resolved_model": "claude-opus-4-8",
+      "strategy": "anthropic",
+      "basis": "content+envelope",
+      "accuracy": "provider-estimate",
+      "approximation": null,
+      "tokens": 453
+    },
+    {
+      "model": "gemini-3.5-flash",
+      "resolved_model": "gemini-3.5-flash",
+      "strategy": "gemini",
+      "basis": "content+envelope",
+      "accuracy": "provider-count",
+      "approximation": null,
+      "tokens": 304
+    },
+    {
+      "model": "google/gemma-4-31B-it",
+      "resolved_model": "google/gemma-4-31B-it",
+      "strategy": "open-weight",
+      "revision": "fb9ae262347c3945692f09a612f8bb189def854f",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 304
+    },
+    {
+      "model": "XiaomiMiMo/MiMo-V2.5",
+      "resolved_model": "XiaomiMiMo/MiMo-V2.5",
+      "strategy": "open-weight",
+      "revision": "2fd4f899a491de2fb0beeafe32b5d700b251f593",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 301
+    },
+    {
+      "model": "XiaomiMiMo/MiMo-V2.5-Pro",
+      "resolved_model": "XiaomiMiMo/MiMo-V2.5-Pro",
+      "strategy": "open-weight",
+      "revision": "f5953f1b993e90367f3d87fed59d099f2c527763",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 301
+    },
+    {
+      "model": "deepseek-ai/DeepSeek-V4-Flash",
+      "resolved_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "strategy": "open-weight",
+      "revision": "6976c7ff1b30a1b2cb7805021b8ba4684041f136",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 297
+    },
+    {
+      "model": "deepseek-ai/DeepSeek-V4-Pro",
+      "resolved_model": "deepseek-ai/DeepSeek-V4-Pro",
+      "strategy": "open-weight",
+      "revision": "89d501aed998d33fa4f4702102ec1bb2331e10f6",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 297
+    },
+    {
+      "model": "Qwen/Qwen3.5-27B",
+      "resolved_model": "Qwen/Qwen3.5-27B",
+      "strategy": "open-weight",
+      "revision": "fc05daec18b0a78c049392ed2e771dde82bdf654",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 312
+    },
+    {
+      "model": "Qwen/Qwen3.5-9B",
+      "resolved_model": "Qwen/Qwen3.5-9B",
+      "strategy": "open-weight",
+      "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "add_special_tokens": false,
+      "basis": "raw-content",
+      "accuracy": "exact",
+      "approximation": null,
+      "tokens": 312
+    }
+  ]
+}
