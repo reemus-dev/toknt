@@ -65,40 +65,118 @@ fn encoding_by_name(name: &str) -> Option<Encoding> {
     })
 }
 
-/// Map an OpenAI *model* name to its encoding, mirroring tiktoken's
-/// `MODEL_PREFIX_TO_ENCODING`. The list is ordered so the more specific o200k
-/// families (`gpt-4o`, `gpt-4.1`, `gpt-4.5`) match before the legacy `gpt-4` /
-/// `gpt-3.5` cl100k families. First prefix match wins.
+/// OpenAI *model*-name → encoding prefixes, mirroring tiktoken's
+/// `MODEL_PREFIX_TO_ENCODING`. Ordered so the more specific o200k families
+/// (`gpt-4o`, `gpt-4.1`, `gpt-4.5`) match before the legacy `gpt-4` / `gpt-3.5`
+/// cl100k families. First prefix match wins. Shared by [`openai_model_encoding`]
+/// and [`known_models`] so the resolver and the `models` listing never drift.
+const OPENAI_PREFIXES: &[(&str, Encoding)] = &[
+    ("gpt-oss", Encoding::O200kHarmony),
+    ("o1", Encoding::O200kBase),
+    ("o3", Encoding::O200kBase),
+    ("o4-mini", Encoding::O200kBase),
+    ("gpt-5", Encoding::O200kBase),
+    ("gpt-4.1", Encoding::O200kBase),
+    ("gpt-4.5", Encoding::O200kBase),
+    ("gpt-4o", Encoding::O200kBase),
+    ("chatgpt-4o", Encoding::O200kBase),
+    ("gpt-4", Encoding::Cl100kBase),
+    ("gpt-3.5-turbo", Encoding::Cl100kBase),
+    ("gpt-35-turbo", Encoding::Cl100kBase),
+    ("gpt-3.5", Encoding::Cl100kBase),
+    ("text-embedding-ada-002", Encoding::Cl100kBase),
+    ("text-embedding-3-", Encoding::Cl100kBase),
+    ("text-davinci-002", Encoding::P50kBase),
+    ("text-davinci-003", Encoding::P50kBase),
+    ("code-davinci-", Encoding::P50kBase),
+    ("davinci", Encoding::R50kBase),
+    ("curie", Encoding::R50kBase),
+    ("babbage", Encoding::R50kBase),
+    ("ada", Encoding::R50kBase),
+    ("gpt2", Encoding::R50kBase),
+];
+
+/// All tiktoken encoding names a user can pass directly as a model id.
+const ENCODING_NAMES: &[&str] = &[
+    "o200k_harmony",
+    "o200k_base",
+    "cl100k_base",
+    "p50k_base",
+    "p50k_edit",
+    "r50k_base",
+    "gpt2",
+];
+
 fn openai_model_encoding(model: &str) -> Option<Encoding> {
-    const PREFIXES: &[(&str, Encoding)] = &[
-        ("gpt-oss", Encoding::O200kHarmony),
-        ("o1", Encoding::O200kBase),
-        ("o3", Encoding::O200kBase),
-        ("o4-mini", Encoding::O200kBase),
-        ("gpt-5", Encoding::O200kBase),
-        ("gpt-4.1", Encoding::O200kBase),
-        ("gpt-4.5", Encoding::O200kBase),
-        ("gpt-4o", Encoding::O200kBase),
-        ("chatgpt-4o", Encoding::O200kBase),
-        ("gpt-4", Encoding::Cl100kBase),
-        ("gpt-3.5-turbo", Encoding::Cl100kBase),
-        ("gpt-35-turbo", Encoding::Cl100kBase),
-        ("gpt-3.5", Encoding::Cl100kBase),
-        ("text-embedding-ada-002", Encoding::Cl100kBase),
-        ("text-embedding-3-", Encoding::Cl100kBase),
-        ("text-davinci-002", Encoding::P50kBase),
-        ("text-davinci-003", Encoding::P50kBase),
-        ("code-davinci-", Encoding::P50kBase),
-        ("davinci", Encoding::R50kBase),
-        ("curie", Encoding::R50kBase),
-        ("babbage", Encoding::R50kBase),
-        ("ada", Encoding::R50kBase),
-        ("gpt2", Encoding::R50kBase),
-    ];
-    PREFIXES
+    OPENAI_PREFIXES
         .iter()
         .find(|(prefix, _)| model.starts_with(prefix))
         .map(|(_, enc)| *enc)
+}
+
+/// A human-facing entry in the known-model registry, for the `models`
+/// subcommand. The list is data the resolver actually uses (OpenAI prefixes,
+/// raw encodings) plus the open-ended provider/HF patterns it recognizes.
+#[derive(Debug, Clone, Copy)]
+pub struct ModelInfo {
+    /// What a user types — an exact encoding name, a family prefix (`gpt-5`),
+    /// or an open pattern (`claude*`, `org/name`).
+    pub pattern: &'static str,
+    /// The strategy this routes to.
+    pub strategy: Strategy,
+    /// What it resolves to or requires (e.g. `→ o200k_base`, `needs ANTHROPIC_API_KEY`).
+    pub detail: &'static str,
+}
+
+/// The known-model registry as a flat, displayable list. Backs `toknt models`.
+/// Open namespaces (HF repos, unrecognized `claude*`/`gemini*` ids) are shown as
+/// patterns, not exhaustively — the resolver accepts any id matching them.
+pub fn known_models() -> Vec<ModelInfo> {
+    let mut models = Vec::new();
+
+    // Raw tiktoken encodings (offline, exact) — type the name directly.
+    for &name in ENCODING_NAMES {
+        models.push(ModelInfo {
+            pattern: name,
+            strategy: Strategy::Tiktoken,
+            detail: "tiktoken encoding · offline, exact",
+        });
+    }
+
+    // OpenAI model families → encoding, from the same table the resolver uses.
+    for &(prefix, enc) in OPENAI_PREFIXES {
+        models.push(ModelInfo {
+            pattern: prefix,
+            strategy: Strategy::Tiktoken,
+            detail: match enc {
+                Encoding::O200kHarmony => "→ o200k_harmony · offline, exact",
+                Encoding::O200kBase => "→ o200k_base · offline, exact",
+                Encoding::Cl100kBase => "→ cl100k_base · offline, exact",
+                Encoding::P50kBase => "→ p50k_base · offline, exact",
+                Encoding::P50kEdit => "→ p50k_edit · offline, exact",
+                Encoding::R50kBase => "→ r50k_base · offline, exact",
+            },
+        });
+    }
+
+    // Open-ended provider / HF namespaces the resolver recognizes by shape.
+    models.push(ModelInfo {
+        pattern: "claude*",
+        strategy: Strategy::Anthropic,
+        detail: "Anthropic count endpoint · provider estimate · needs ANTHROPIC_API_KEY",
+    });
+    models.push(ModelInfo {
+        pattern: "gemini*",
+        strategy: Strategy::Gemini,
+        detail: "Gemini count endpoint · provider count · needs GEMINI_API_KEY",
+    });
+    models.push(ModelInfo {
+        pattern: "org/name",
+        strategy: Strategy::OpenWeight,
+        detail: "Hugging Face tokenizer.json · offline after fetch · HF_TOKEN if gated",
+    });
+
+    models
 }
 
 /// Resolve the body after an explicit `openai:` prefix: a raw encoding name, or

@@ -17,9 +17,9 @@ mod options;
 mod result;
 mod strategy;
 
-pub use cache::{cached_path, list_cached, pull, remove_cached, CachedEntry};
+pub use cache::{cache_dir, cached_path, list_cached, pull, remove_cached, CachedEntry};
 pub use error::TokntError;
-pub use model::{resolve, Encoding, Target};
+pub use model::{known_models, resolve, Encoding, ModelInfo, Target};
 pub use options::{ApproxPolicy, CountOptions, NetworkPolicy};
 pub use result::{
     Accuracy, ApproxReason, Approximation, Basis, CountResult, ProxyEncoding, Strategy,
@@ -43,6 +43,22 @@ pub fn count(input: &str, model: &str, options: &CountOptions) -> Result<CountRe
         },
         Err(err) => maybe_approx(input, model, options, err),
     }
+}
+
+/// Count `input` as a deliberate proxy estimate when there is no model id to
+/// resolve — the `--approx`-with-no-model case. Always labeled
+/// [`Accuracy::Approximate`]; `requested` is echoed as the result's `model`.
+///
+/// (A resolvable model that merely falls back goes through [`count`] with
+/// [`ApproxPolicy::AllowApprox`], where the precise reason is derived from the
+/// failure; this entry point exists only for the case with no model at all.)
+pub fn count_approx(
+    input: &str,
+    requested: &str,
+    proxy: ProxyEncoding,
+    reason: ApproxReason,
+) -> CountResult {
+    strategy::approx::count(input, requested, proxy, reason)
 }
 
 /// Validate `input` as UTF-8, then [`count`]. `what` labels the input source
