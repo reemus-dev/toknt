@@ -82,10 +82,11 @@ fn maybe_approx(
 ) -> Result<CountResult> {
     if let ApproxPolicy::AllowApprox {
         proxy_encoding,
-        reason,
+        reason: requested_reason,
     } = options.approx
     {
         if err.approx_eligible() {
+            let reason = err.approx_reason().unwrap_or(requested_reason);
             return Ok(strategy::approx::count(
                 input,
                 model,

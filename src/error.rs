@@ -4,6 +4,8 @@
 
 use thiserror::Error;
 
+use crate::result::ApproxReason;
+
 #[derive(Error, Debug)]
 pub enum TokntError {
     #[error(
@@ -89,5 +91,21 @@ impl TokntError {
                 | TokntError::OfflineApiBlocked { .. }
                 | TokntError::OfflineCacheMiss { .. }
         )
+    }
+
+    /// The reason to serialize when an approximation falls back because of this
+    /// failure. Keep this coupled to `approx_eligible` so the result describes
+    /// what actually happened, not what the caller guessed might happen.
+    pub(crate) fn approx_reason(&self) -> Option<ApproxReason> {
+        Some(match self {
+            TokntError::UnknownModel { .. }
+            | TokntError::UnsupportedOpenAiModel { .. }
+            | TokntError::UnknownEncoding { .. } => ApproxReason::UnsupportedModel,
+            TokntError::MissingApiKey { .. } => ApproxReason::MissingApiKey,
+            TokntError::OfflineApiBlocked { .. } | TokntError::OfflineCacheMiss { .. } => {
+                ApproxReason::Offline
+            }
+            _ => return None,
+        })
     }
 }

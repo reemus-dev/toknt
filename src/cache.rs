@@ -16,6 +16,7 @@ use crate::error::TokntError;
 use crate::options::{CountOptions, NetworkPolicy};
 
 const TOKENIZER_FILE: &str = "tokenizer.json";
+const TOKENIZER_CONFIG_FILE: &str = "tokenizer_config.json";
 
 /// A cached open-weight tokenizer entry.
 #[derive(Debug, Clone)]
@@ -120,10 +121,13 @@ pub(crate) fn ensure_tokenizer(
         .with_progress(false)
         .build()
         .map_err(|e| classify_hf_error(repo, e))?;
-    let path = api
-        .model(repo.to_string())
+    let model = api.model(repo.to_string());
+    let path = model
         .get(TOKENIZER_FILE)
         .map_err(|e| classify_hf_error(repo, e))?;
+    // Sidecar config is useful future metadata, but raw counting only needs
+    // tokenizer.json; many repos omit the sidecar, so cache it opportunistically.
+    let _ = model.get(TOKENIZER_CONFIG_FILE);
     let revision = revision_from_path(&path).unwrap_or_else(|| "main".to_string());
     Ok((path, revision))
 }
@@ -138,9 +142,14 @@ pub fn pull(repo: &str, opts: &CountOptions) -> Result<PathBuf, TokntError> {
         .with_progress(false)
         .build()
         .map_err(|e| classify_hf_error(repo, e))?;
-    api.model(repo.to_string())
+    let model = api.model(repo.to_string());
+    let path = model
         .get(TOKENIZER_FILE)
-        .map_err(|e| classify_hf_error(repo, e))
+        .map_err(|e| classify_hf_error(repo, e))?;
+    // Keep `pull` aligned with normal counting: tokenizer.json is required,
+    // tokenizer_config.json is cached when present.
+    let _ = model.get(TOKENIZER_CONFIG_FILE);
+    Ok(path)
 }
 
 /// The cached tokenizer path for `repo` if present, without any network.
