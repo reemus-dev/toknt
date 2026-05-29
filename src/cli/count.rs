@@ -153,12 +153,16 @@ fn count_row(item: input::Input, columns: &[Column], opts: &CountOptions) -> Row
         bytes: item.bytes.len(),
     });
 
+    // If --approx is active, a fallback-eligible failure would have produced an
+    // estimate rather than an error; so the hint below only ever fires when the
+    // user has not already opted in.
+    let approx_on = matches!(opts.approx, ApproxPolicy::AllowApprox { .. });
     let cells = columns
         .iter()
         .map(|col| match col {
             Column::Model(model) => match count(text, model, opts) {
                 Ok(result) => Cell::Ok(Box::new(result)),
-                Err(err) => Cell::Err(err.to_string()),
+                Err(err) => Cell::Err(enrich_error(err, approx_on)),
             },
             Column::ApproxNoModel => Cell::Ok(Box::new(count_approx(
                 text,
@@ -174,6 +178,30 @@ fn count_row(item: input::Input, columns: &[Column], opts: &CountOptions) -> Row
         cells,
         stats,
     }
+}
+
+/// Render a count failure, suggesting `--approx` when an estimate could satisfy
+/// it and the user has not already asked for one. The variant set mirrors the
+/// core's (private) fallback-eligibility rule — the cases where a proxy count is
+/// a sensible alternative to a hard error.
+fn enrich_error(err: TokntError, approx_on: bool) -> String {
+    let message = err.to_string();
+    if approx_on || !approx_would_help(&err) {
+        return message;
+    }
+    format!("{message} (or re-run with --approx for a labeled estimate)")
+}
+
+fn approx_would_help(err: &TokntError) -> bool {
+    matches!(
+        err,
+        TokntError::UnknownModel { .. }
+            | TokntError::UnsupportedOpenAiModel { .. }
+            | TokntError::UnknownEncoding { .. }
+            | TokntError::MissingApiKey { .. }
+            | TokntError::OfflineApiBlocked { .. }
+            | TokntError::OfflineCacheMiss { .. }
+    )
 }
 
 /// `TOKNT_MODEL`, when set and non-empty.

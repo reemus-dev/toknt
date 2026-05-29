@@ -210,6 +210,37 @@ fn approx_does_not_force_estimate_when_exact_is_available() {
     assert!(!r.out.contains("APPROXIMATE"));
 }
 
+#[test]
+fn missing_key_errors_and_suggests_approx() {
+    // Scrub the key so this is hermetic — the API key is checked before any
+    // network call, so no request is made.
+    let r = run(
+        toknt()
+            .env_remove("ANTHROPIC_API_KEY")
+            .args(["-m", "claude-opus-4-8", "-t", "hi"]),
+        None,
+    );
+    assert_eq!(r.code, 1);
+    assert!(r.err.contains("ANTHROPIC_API_KEY"), "stderr: {}", r.err);
+    assert!(r.err.contains("--approx"), "stderr: {}", r.err);
+}
+
+#[test]
+fn missing_key_with_approx_falls_back_to_estimate() {
+    let r = run(
+        toknt().env_remove("ANTHROPIC_API_KEY").args([
+            "--approx",
+            "-m",
+            "claude-opus-4-8",
+            "-t",
+            "hello world",
+        ]),
+        None,
+    );
+    assert_eq!(r.code, 0);
+    assert!(r.out.contains("APPROXIMATE"), "stdout: {}", r.out);
+}
+
 // ---- output modes ---------------------------------------------------------
 
 #[test]
