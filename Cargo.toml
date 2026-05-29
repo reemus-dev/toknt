@@ -1,0 +1,39 @@
+[package]
+name = "toknt"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+description = "Accurate, model-specific token counting for arbitrary input"
+license = "MIT"
+
+[lib]
+name = "toknt"
+path = "src/lib.rs"
+
+# Goal 1 ships only the verification harness; the user-facing CLI is Goal 2.
+[[bin]]
+name = "toknt-verify"
+path = "src/bin/toknt-verify.rs"
+
+[dependencies]
+# OpenAI BPE: rank tables are compiled in (offline, exact). This embedding is
+# intended — the "do not embed tokenizers" rule targets multi-MB HF files only.
+tiktoken-rs = "0.11"
+# HF tokenizers — load tokenizer.json from disk; keep default features (proven to
+# load the proof-set tokenizers). Its optional `http` feature stays OFF so all
+# network goes through our own cache policy.
+tokenizers = "0.23"
+# HF Hub downloads on a sync, rustls-only path (no tokio, no OpenSSL). The
+# `ureq` feature selects the sync agent; with `native-tls` absent it uses rustls
+# automatically — a separate `rustls-tls` feature is inert on this path.
+hf-hub = { version = "0.5", default-features = false, features = ["ureq"] }
+# Anthropic / Gemini count endpoints — blocking + rustls, no native-tls.
+reqwest = { version = "0.13", default-features = false, features = ["json", "blocking", "rustls", "rustls-native-certs"] }
+# XDG-style cache dir resolution for toknt-owned tokenizer files.
+etcetera = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+# sample sha256 fingerprint in verification.json
+sha2 = "0.10"

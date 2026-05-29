@@ -2,81 +2,53 @@ version: "3"
 set: ["e", "u", "pipefail"]
 interval: 2s
 env: {}
+
+# toknt is a self-contained Rust binary. The Node toolchain stays only to format
+# the repo's Markdown/configs (prettier) — hence the `fmt:md` task.
+#
+# Run tasks inside the repo's mise environment so `.env` API keys load (mise
+# auto-loads `.env`); `verify` and live counts need them.
 tasks:
+  build:
+    desc: Debug build
+    cmd: cargo build
 
-  lintfmt:
-    silent: true
-    cmd: |
-      eslint_status=0
-      prettier_status=0
-  
-      echo "🔧 Linting"
-      eslint . --fix || eslint_status=$?
-      
-      echo "🧹 Formatting"
-      prettier --write . | { rg -vF "(unchanged)" || [ "$?" -eq 1 ]; } || prettier_status=$?
-  
-      if [ "$eslint_status" -ne 0 ]; then
-        echo "🔴 ESLint Error"
-        exit "$eslint_status"
-      fi
-      
-      if [ "$prettier_status" -ne 0 ]; then
-        echo "🔴 Prettier Error"
-        exit "$prettier_status"
-      fi  
+  build:release:
+    desc: Release build -> target/release/toknt(-verify)
+    cmd: cargo build --release
 
-  deps:install:
-    desc: Install workspace dependencies with Bun
-    cmd: bun install && syncpack format
+  run:
+    desc: Run a binary (pass args after --, e.g. `task run -- --bin toknt-verify`)
+    cmd: cargo run {{.CLI_ARGS}}
 
-  typecheck:
+  test:
+    desc: Correctness guards (does not rewrite verification.json)
+    cmd: cargo test
+
+  clippy:
+    desc: Lint — keep clean
+    cmd: cargo clippy --all-targets -- -D warnings
+
+  fmt:
+    desc: Format Rust sources
+    cmd: cargo fmt
+
+  fmt:check:
+    desc: Verify Rust formatting
+    cmd: cargo fmt --check
+
+  fmt:md:
+    desc: Format Markdown/configs with prettier (Node dev-tooling)
+    cmd: prettier --write "**/*.md"
+
+  check:
+    desc: Full local gate — build, lint, format check, tests
     cmds:
-      - tsc --noEmit --project tsconfig.json
+      - cargo build
+      - cargo clippy --all-targets -- -D warnings
+      - cargo fmt --check
+      - cargo test
 
-  resources:fetch:
-    desc: Pull external docs/examples/extensions from upstream repos into resources/
-    cmd: |
-      rg --hidden --no-ignore --no-messages -l '@mariozechner/' resources/ \
-        | xargs sed -i '' 's/@mariozechner\//@earendil-works\//g' || true
-    deps:
-      # Main Pi repo
-      - task: resources:giget
-        vars: {repo: "earendil-works/pi", out: "pi"}
-      # Multi-extension repos
-      - task: resources:giget
-        vars: {repo: "agnishcc/pi-extention-monorepo", out: "repos/pi-extention-monorepo"}
-      - task: resources:giget
-        vars: {repo: "emanuelcasco/pi-mono-extensions", out: "repos/pi-mono-extensions"}
-      - task: resources:giget
-        vars: {repo: "juicesharp/rpiv-mono", out: "repos/rpiv-mono"}
-      - task: resources:giget
-        vars: {repo: "mrclrchtr/supi", out: "repos/supi"}
-      - task: resources:giget
-        vars: {repo: "narumiruna/pi-extensions", out: "repos/pi-extensions"}
-      - task: resources:giget
-        vars: {repo: "vanillagreencom/vstack", out: "repos/vstack"}
-      # Single-extension and focused repos
-      - task: resources:giget
-        vars: {repo: "jordanburke/reddit-mcp-server", out: "repos/reddit-mcp-server"}
-      - task: resources:giget
-        vars: {repo: "kepano/defuddle", out: "repos/defuddle"}
-      - task: resources:giget
-        vars: {repo: "MasuRii/pi-tool-display", out: "repos/pi-tool-display"}
-      - task: resources:giget
-        vars: {repo: "mitsuhiko/agent-stuff", out: "repos/agent-stuff"}
-      - task: resources:giget
-        vars: {repo: "nicobailon/pi-web-access", out: "repos/pi-web-access"}
-      - task: resources:giget
-        vars: {repo: "Thinkscape/agent-smart-fetch", out: "repos/agent-smart-fetch"}
-      - task: resources:giget
-        vars: {repo: "wevm/curl.md", out: "repos/curl.md"}
-      - task: resources:giget
-        vars: {repo: "Whamp/pi-token-burden", out: "repos/pi-token-burden"}
-      - task: resources:giget
-        vars: {repo: "xRyul/pi-show-diffs", out: "repos/pi-show-diffs"}
-
-  resources:giget:
-    internal: true
-    requires: {vars: [repo, out]}
-    cmd: giget --forceClean "gh:{{.repo}}" "resources/{{.out}}"
+  verify:
+    desc: Live verification gate — drive the core over all proof targets and (re)write verification.json
+    cmd: cargo run --bin toknt-verify
