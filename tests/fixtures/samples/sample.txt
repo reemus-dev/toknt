@@ -1,0 +1,30 @@
+# toknt — a token-counting probe
+
+Tokenizers split text into subword units, so the same sentence costs a
+different number of tokens on each model. This sample mixes prose, source code,
+mathematical symbols, emoji, and several scripts, to exercise a counter across
+the kinds of input it meets in the wild — not just clean ASCII English.
+
+## Code
+
+```rust
+fn count(input: &str, model: &Model) -> Result<Count> {
+    let encoding = model.encoding()?;             // model -> tokenizer
+    let tokens = encoding.encode_ordinary(input); // ordinary path: never raises
+    Ok(Count { tokens: tokens.len() })
+}
+```
+
+## Symbols & emoji
+
+Math: ∑ xᵢ² ≤ ∫₀^∞ e⁻ˣ dx, π ≈ 3.14159, ∆ = b² − 4ac.
+Emoji: 🦊🚀🔤🧮✅ — currency $1,000 · €750 · ¥99, an em‑dash and "smart quotes".
+
+## Writing systems
+
+中文：分词器把文本切成子词单元。
+日本語：トークナイザーはテキストを分割します。
+한국어: 토크나이저는 텍스트를 나눕니다.
+Русский: Токенизатор разбивает текст на части.
+
+That is the whole probe.

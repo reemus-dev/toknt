@@ -1,0 +1,43 @@
+[env]
+_.file = [".env"]
+_.path = ["{{config_root}}/node_modules/.bin"]
+
+REPO_ROOT="{{config_root}}"
+
+## Env: Misc
+TASK_TEMP_DIR = "{{config_root}}/.meta/.cache/task"
+
+#~ Tools
+[tools]
+
+## Tools: Node.js
+node = { version = "24.9", postinstall = "corepack enable" }
+bun = "latest"
+
+## Tools: Rust
+# Pinned (not "latest") so the toolchain — and the committed Cargo.lock — stay
+# reproducible for the unattended agent build. mise exports RUSTUP_TOOLCHAIN to
+# this version, which takes precedence over rust-toolchain.toml; keep the two in
+# sync (the .toml documents the same pin + components for non-mise/CI consumers).
+# The postinstall guarantees rust-analyzer (and clippy/rustfmt) exist on this
+# toolchain — rustup's default profile omits rust-analyzer, whose absence causes
+# the LSP fallback recursion. Idempotent: re-adding present components is a no-op.
+rust = { version = "1.96.0", postinstall = "rustup component add rust-analyzer clippy rustfmt" }
+
+## Tools
+gomplate = "4"
+task = "3"
+
+## Tools: Language Utils
+shellcheck = "latest"
+shfmt = "latest"
+
+## Tools: Shell Utils
+argc = "1.22.0"
+fd = "10.3"
+fzf = "latest"
+jq = "latest"
+rclone = "1"
+ripgrep = "latest"
+watchexec = "latest"
+yq = "latest"

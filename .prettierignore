@@ -1,0 +1,9 @@
+*.yaml
+*min.js
+#gen*.ts
+*gen.ts
+*gen.d.ts
+*generated.ts
+*generated.d.ts
+dist/
+

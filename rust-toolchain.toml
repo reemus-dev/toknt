@@ -1,0 +1,16 @@
+# Pins the Rust toolchain and the components required for this repo.
+#
+# Why this file exists: rustup proxies (cargo/rustc/rust-analyzer in ~/.cargo/bin)
+# resolve against the toolchain declared here. Listing `rust-analyzer` as a
+# component guarantees the binary is present, which prevents the
+# "rust-analyzer is unavailable for the active toolchain" fallback loop that
+# otherwise crashes the LSP. clippy + rustfmt are pinned so lint/format work
+# without an extra `rustup component add` step on a fresh machine.
+#
+# Bumping: change `channel`, then run `rustup show` (or any cargo command) once
+# so rustup installs the toolchain and its components.
+
+[toolchain]
+channel = "1.96.0"
+components = ["rust-analyzer", "clippy", "rustfmt"]
+profile = "minimal"

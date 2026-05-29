@@ -1,0 +1,7 @@
+This file deliberately contains tokenizer special-token strings as ordinary text.
+
+<|endoftext|> must be counted as plain characters, not treated as an end-of-text marker.
+<|im_start|>system<|im_end|> and <|im_start|>user<|im_end|> are ChatML control strings.
+Llama-style markers like <s>, </s>, [INST], and <|begin_of_text|> appear here too.
+
+The ordinary encoding path must never raise on any of these — it counts them as text.
