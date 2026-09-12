@@ -88,23 +88,23 @@ available.
 - **`--json`** — a stable schema:
   `{ "results": [ { input, model, resolved_model, strategy, encoding?, basis, accuracy, approximation, tokens, stats? } ], "total": [...] | null }`.
   One result per (input × model); failed cells carry an `error` field instead of
-  `tokens`. `total` is per-model and present only for multiple inputs.
-  Each total has `model`, `tokens`, `complete`, `bases`, `accuracies`, and
+  `tokens`. `total` is per-model and present only for multiple inputs. Each
+  total has `model`, `tokens`, `complete`, `bases`, `accuracies`, and
   `approximations`. The three arrays contain distinct metadata from successful
   results in first-seen order. Mixed totals retain every contributing basis and
   accuracy; `approximations` lists each proxy encoding and reason, and is empty
   when no approximation contributed. Totals sum the separate input counts, so
   provider totals include an envelope for each successful input.
-  `complete: false` means failed inputs were excluded. With no successful inputs,
-  `tokens` is zero and the metadata arrays are empty; a successful zero-token
-  count still contributes its metadata.
+  `complete: false` means failed inputs were excluded. With no successful
+  inputs, `tokens` is zero and the metadata arrays are empty; a successful
+  zero-token count still contributes its metadata.
 - **`-v/--verbose`** — a human breakdown: model, resolved target, strategy,
   basis, accuracy, approximation metadata, tokens.
-- **`--stats`** — adds chars, words, bytes, and tokens-per-word.
-  File × model matrices include a labeled `TOK/WORD` column for each model.
-  Total ratios divide summed tokens by summed words for that model's successful
-  inputs. Unavailable ratios are `—`, approximations have a `~` prefix, and
-  partial column totals have a `*` suffix.
+- **`--stats`** — adds chars, words, bytes, and tokens-per-word. File × model
+  matrices include a labeled `TOK/WORD` column for each model. Total ratios
+  divide summed tokens by summed words for that model's successful inputs.
+  Unavailable ratios are `—`, approximations have a `~` prefix, and partial
+  column totals have a `*` suffix.
 
 For example, a missing-key approximation over two files can produce this total:
 
@@ -116,7 +116,7 @@ For example, a missing-key approximation over two files can produce this total:
   "bases": ["raw-content"],
   "accuracies": ["approximate"],
   "approximations": [
-    { "proxy_encoding": "o200k_base", "reason": "missing-api-key" }
+    {"proxy_encoding": "o200k_base", "reason": "missing-api-key"}
   ]
 }
 ```
@@ -195,3 +195,53 @@ cargo run --bin toknt-verify   # live verification -> verification.json (needs k
 The counting **engine** is a reusable library (`src/lib.rs`), proven across all
 four strategies by the committed `verification.json`. The **CLI**
 (`src/main.rs`, `src/cli/`) is a thin product surface over it.
+
+## CI and downloadable builds
+
+[CI](https://github.com/reemus-dev/toknt/actions/workflows/ci.yml) runs on pull
+requests, pushes to `main`, and version tags matching `v*`. It runs the existing
+deterministic tests on Linux, macOS, and Windows. Linux also checks Rust
+formatting, Clippy, and README/workflow formatting using the retained Node
+tools. Rust comes from `rust-toolchain.toml`; Cargo uses the committed lockfile.
+No provider API keys are needed, and routine CI preserves `verification.json`.
+Run `toknt-verify` locally with your keys when you explicitly want live
+evidence.
+
+[Build binaries](https://github.com/reemus-dev/toknt/actions/workflows/build.yml)
+runs on `v*` tags or manually from **Actions → Build binaries → Run workflow**.
+Each native build uses `cargo build --locked --release --bin toknt`, then runs
+the resulting CLI's help, version, and an exact offline count before upload.
+
+| Platform          | Architecture  | Rust target                 | Runner              |
+| ----------------- | ------------- | --------------------------- | ------------------- |
+| Linux (GNU/glibc) | x64           | `x86_64-unknown-linux-gnu`  | Ubuntu 22.04        |
+| Linux (GNU/glibc) | ARM64         | `aarch64-unknown-linux-gnu` | Ubuntu 22.04 ARM64  |
+| macOS             | Apple Silicon | `aarch64-apple-darwin`      | macOS 15            |
+| macOS             | Intel         | `x86_64-apple-darwin`       | macOS 15 Intel      |
+| Windows           | x64           | `x86_64-pc-windows-msvc`    | Windows Server 2025 |
+| Windows           | ARM64         | `aarch64-pc-windows-msvc`   | Windows 11 ARM64    |
+
+These are standard GitHub-hosted runners. Cargo dependencies are cached; newer
+CI runs cancel superseded runs for the same branch or pull request. Downloads
+are retained for **14 days** under the completed build run's **Artifacts**. Each
+`toknt-<target>` artifact contains a `.tar.gz` (`.zip` on Windows) with the
+binary and README, plus a SHA-256 checksum. Unix archives retain executable
+permissions. Extract the archive and put `toknt` (or `toknt.exe`) on your
+`PATH`. Linux builds use glibc rather than musl; these are native build
+artifacts, with no Developer ID signing or notarization configured for macOS.
+
+To exercise builds without making a version tag:
+
+```bash
+gh workflow run build.yml --ref main
+gh run list --workflow build.yml
+gh run download RUN_ID --name toknt-aarch64-apple-darwin
+```
+
+For a versioned build, first update and commit `Cargo.toml` and `Cargo.lock` to
+the intended version and wait for CI on `main` to pass. Then create and push the
+matching tag (for example, `git tag v0.1.0` followed by
+`git push origin v0.1.0`). Tags trigger both CI and binary builds; inspect both
+runs before using the artifacts. Manual builds use the version already recorded
+in Cargo. These workflows create Actions artifacts; a GitHub Release or package
+registry publication is a separate step.
