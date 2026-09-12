@@ -30,8 +30,8 @@ pub type Result<T> = std::result::Result<T, TokntError>;
 
 /// Count tokens in already-validated UTF-8 `input` for `model` under `options`.
 ///
-/// On a fallback-eligible failure (unknown/unsupported model, missing API key,
-/// offline-blocked path) the result depends on `options.approx`: with
+/// On a fallback-eligible failure (unknown/unsupported model, missing API key)
+/// the result depends on `options.approx`: with
 /// [`ApproxPolicy::ExactOnly`] the error surfaces; with
 /// [`ApproxPolicy::AllowApprox`] the count falls back to the proxy encoding and
 /// is labeled [`Accuracy::Approximate`].

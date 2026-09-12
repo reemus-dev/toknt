@@ -25,7 +25,9 @@ pub enum ApproxPolicy {
     #[default]
     ExactOnly,
     /// On a fallback-eligible failure, count with `proxy_encoding` and label the
-    /// result approximate with `reason`.
+    /// result approximate with `reason`. Offline-policy failures are not
+    /// fallback-eligible; `NetworkPolicy::Offline` remains a hard no-network
+    /// contract.
     AllowApprox {
         proxy_encoding: ProxyEncoding,
         reason: ApproxReason,

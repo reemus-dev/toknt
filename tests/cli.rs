@@ -192,6 +192,7 @@ fn unknown_model_without_approx_errors() {
 fn approx_with_no_model_is_marked_never_silent() {
     let r = run(toknt().args(["--approx", "-t", "hello world"]), None);
     assert_eq!(r.code, 0);
+    assert!(r.out.starts_with('~'), "stdout: {}", r.out);
     assert!(r.out.contains("APPROXIMATE"), "stdout: {}", r.out);
 }
 
@@ -417,6 +418,37 @@ fn offline_uncached_open_weight_hints_pull() {
         None,
     );
     assert_eq!(r.code, 1);
+    assert!(r.err.contains("toknt pull"), "stderr: {}", r.err);
+}
+
+#[test]
+fn offline_api_model_still_errors_with_approx() {
+    let r = run(
+        toknt().args(["-m", "claude-opus-4-8", "--offline", "--approx", "-t", "hi"]),
+        None,
+    );
+    assert_eq!(r.code, 1);
+    assert!(r.out.is_empty(), "stdout: {}", r.out);
+    assert!(r.err.contains("offline"), "stderr: {}", r.err);
+    assert!(r.err.contains("anthropic"), "stderr: {}", r.err);
+}
+
+#[test]
+fn offline_uncached_open_weight_still_errors_with_approx() {
+    let dir = TempDir::new();
+    let r = run(
+        toknt().env("TOKNT_CACHE_DIR", dir.path()).args([
+            "-m",
+            "some-org/not-cached",
+            "--offline",
+            "--approx",
+            "-t",
+            "hi",
+        ]),
+        None,
+    );
+    assert_eq!(r.code, 1);
+    assert!(r.out.is_empty(), "stdout: {}", r.out);
     assert!(r.err.contains("toknt pull"), "stderr: {}", r.err);
 }
 

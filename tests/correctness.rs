@@ -149,6 +149,25 @@ fn offline_uncached_open_weight_is_an_actionable_cache_miss() {
     assert!(matches!(err, TokntError::OfflineCacheMiss { .. }));
 }
 
+#[test]
+fn offline_policy_is_not_approximated() {
+    let opts = CountOptions {
+        network: NetworkPolicy::Offline,
+        approx: ApproxPolicy::AllowApprox {
+            proxy_encoding: ProxyEncoding::O200kBase,
+            reason: ApproxReason::Offline,
+        },
+        cache_dir: Some(std::env::temp_dir().join("toknt-test-cache-miss-does-not-exist")),
+        ..CountOptions::default()
+    };
+
+    let api_err = count("hello", "claude-opus-4-8", &opts).unwrap_err();
+    assert!(matches!(api_err, TokntError::OfflineApiBlocked { .. }));
+
+    let hf_err = count("hello", "some-org/definitely-not-cached", &opts).unwrap_err();
+    assert!(matches!(hf_err, TokntError::OfflineCacheMiss { .. }));
+}
+
 // ---- approximation policy --------------------------------------------------
 
 #[test]

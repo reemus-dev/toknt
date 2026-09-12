@@ -79,8 +79,8 @@ pub enum TokntError {
 
 impl TokntError {
     /// True for failures where an `--approx` proxy estimate is a reasonable
-    /// fallback (no usable exact/provider path), as opposed to hard input or
-    /// transport errors that must surface.
+    /// fallback (no usable exact/provider path), as opposed to hard input,
+    /// offline-policy, or transport errors that must surface.
     pub(crate) fn approx_eligible(&self) -> bool {
         matches!(
             self,
@@ -88,8 +88,6 @@ impl TokntError {
                 | TokntError::UnsupportedOpenAiModel { .. }
                 | TokntError::UnknownEncoding { .. }
                 | TokntError::MissingApiKey { .. }
-                | TokntError::OfflineApiBlocked { .. }
-                | TokntError::OfflineCacheMiss { .. }
         )
     }
 

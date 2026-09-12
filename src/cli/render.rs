@@ -47,7 +47,7 @@ fn scalar(rep: &Report) -> u8 {
     match &row.cells[0] {
         Cell::Ok(res) => {
             if res.accuracy == Accuracy::Approximate {
-                println!("{} (APPROXIMATE: {} proxy)", res.tokens, proxy_label(res));
+                println!("~{} (APPROXIMATE: {} proxy)", res.tokens, proxy_label(res));
             } else {
                 println!("{}", res.tokens);
             }
