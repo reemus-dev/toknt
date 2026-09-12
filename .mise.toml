@@ -12,7 +12,7 @@ TASK_TEMP_DIR = "{{config_root}}/.meta/.cache/task"
 
 ## Tools: Node.js
 node = { version = "24.9", postinstall = "corepack enable" }
-bun = "latest"
+bun = "1"
 
 ## Tools: Rust
 # Pinned (not "latest") so the toolchain — and the committed Cargo.lock — stay
@@ -33,7 +33,7 @@ shellcheck = "latest"
 shfmt = "latest"
 
 ## Tools: Shell Utils
-argc = "1.22.0"
+argc = "latest"
 fd = "10.3"
 fzf = "latest"
 jq = "latest"
