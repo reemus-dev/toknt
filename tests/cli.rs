@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use toknt::{count, CountOptions};
 
 // ---- harness --------------------------------------------------------------
@@ -282,18 +282,87 @@ fn json_per_file_total_sums_columns() {
     let a = dir.write("a.txt", b"hello world");
     let b = dir.write("b.txt", b"the quick brown fox jumps");
     let r = run(
-        toknt().args(["-m", "o200k_base", "--json"]).arg(&a).arg(&b),
+        toknt()
+            .env_remove("ANTHROPIC_API_KEY")
+            .args([
+                "-m",
+                "o200k_base",
+                "-m",
+                "claude-opus-4-8",
+                "--approx",
+                "--json",
+            ])
+            .arg(&a)
+            .arg(&b),
         None,
     );
     assert_eq!(r.code, 0);
     let v: Value = serde_json::from_str(&r.out).expect("valid json");
-    assert_eq!(v["results"].as_array().unwrap().len(), 2);
-    let total = &v["total"][0];
-    assert_eq!(total["model"], "o200k_base");
-    assert_eq!(total["complete"], true);
+    assert_eq!(v["results"].as_array().unwrap().len(), 4);
     let expected = expected_tokens("hello world", "o200k_base")
         + expected_tokens("the quick brown fox jumps", "o200k_base");
-    assert_eq!(total["tokens"], expected);
+    assert_eq!(
+        v["total"],
+        json!([
+            {
+                "model": "o200k_base", "tokens": expected, "complete": true,
+                "bases": ["raw-content"], "accuracies": ["exact"],
+                "approximations": [],
+            },
+            {
+                "model": "claude-opus-4-8", "tokens": expected, "complete": true,
+                "bases": ["raw-content"], "accuracies": ["approximate"],
+                "approximations": [{"proxy_encoding": "o200k_base", "reason": "missing-api-key"}],
+            },
+        ])
+    );
+}
+
+#[test]
+fn json_partial_totals_distinguish_zero_token_success_from_failure() {
+    let dir = TempDir::new();
+    let empty = dir.write("empty.txt", b"");
+    let bad = dir.write("bad.bin", &[0xff]);
+    let r = run(
+        toknt()
+            .args([
+                "-m",
+                "o200k_base",
+                "-m",
+                "unknown-model",
+                "-m",
+                "claude-opus-4-8",
+                "--approx",
+                "--offline",
+                "--json",
+            ])
+            .arg(&empty)
+            .arg(&bad),
+        None,
+    );
+    assert_eq!(r.code, 1);
+    assert!(r.err.is_empty(), "JSON errors stay in stdout: {}", r.err);
+    let v: Value = serde_json::from_str(&r.out).expect("valid json");
+    assert_eq!(v["results"].as_array().unwrap().len(), 6);
+    assert_eq!(
+        v["total"],
+        json!([
+            {
+                "model": "o200k_base", "tokens": 0, "complete": false,
+                "bases": ["raw-content"], "accuracies": ["exact"],
+                "approximations": [],
+            },
+            {
+                "model": "unknown-model", "tokens": 0, "complete": false,
+                "bases": ["raw-content"], "accuracies": ["approximate"],
+                "approximations": [{"proxy_encoding": "o200k_base", "reason": "unsupported-model"}],
+            },
+            {
+                "model": "claude-opus-4-8", "tokens": 0, "complete": false,
+                "bases": [], "accuracies": [], "approximations": [],
+            },
+        ])
+    );
 }
 
 #[test]
@@ -349,6 +418,109 @@ fn per_file_breakdown_has_total() {
     assert!(r.out.contains("b.txt"));
 }
 
+#[test]
+fn matrix_stats_labels_each_ratio_and_weights_partial_column_totals() {
+    let dir = TempDir::new();
+    let inputs = [
+        ("a.txt", "你好，世界！"),
+        ("b.txt", "the quick brown fox jumps"),
+    ];
+    for (name, text) in inputs {
+        dir.write(name, text.as_bytes());
+    }
+    dir.write("bad.bin", &[0xff]);
+    let r = run(
+        toknt().current_dir(dir.path()).args([
+            "-m",
+            "o200k_base",
+            "-m",
+            "cl100k_base",
+            "-m",
+            "unknown-model",
+            "-m",
+            "claude-opus-4-8",
+            "--approx",
+            "--offline",
+            "--stats",
+            "a.txt",
+            "b.txt",
+            "bad.bin",
+        ]),
+        None,
+    );
+    assert_eq!(r.code, 1);
+    let matrix: Vec<Vec<&str>> = r
+        .out
+        .lines()
+        .take_while(|line| !line.is_empty())
+        .map(|line| line.split_whitespace().collect())
+        .collect();
+    assert_eq!(matrix.len(), 5, "stdout: {}", r.out);
+    for model in [
+        "o200k_base",
+        "cl100k_base",
+        "unknown-model",
+        "claude-opus-4-8",
+    ] {
+        assert!(
+            r.out
+                .lines()
+                .next()
+                .unwrap()
+                .contains(&format!("{model} TOK/WORD")),
+            "missing ratio header for {model}: {}",
+            r.out
+        );
+    }
+    for (ri, (name, text)) in inputs.iter().enumerate() {
+        let mut expected = vec![name.to_string()];
+        for (model, mark) in [("o200k_base", ""), ("cl100k_base", ""), ("o200k_base", "~")] {
+            let tokens = expected_tokens(text, model);
+            let ratio = tokens as f64 / text.split_whitespace().count() as f64;
+            expected.extend([format!("{mark}{tokens}"), format!("{mark}{ratio:.2}")]);
+        }
+        expected.extend(["—".into(), "—".into()]);
+        assert_eq!(matrix[ri + 1], expected, "stdout: {}", r.out);
+    }
+    assert_eq!(
+        matrix[3],
+        ["bad.bin", "—", "—", "—", "—", "—", "—", "—", "—"]
+    );
+    let mut total = vec!["TOTAL".to_string()];
+    for (model, mark) in [("o200k_base", ""), ("cl100k_base", ""), ("o200k_base", "~")] {
+        let tokens: usize = inputs
+            .iter()
+            .map(|(_, text)| expected_tokens(text, model))
+            .sum();
+        let words: usize = inputs
+            .iter()
+            .map(|(_, text)| text.split_whitespace().count())
+            .sum();
+        let ratio = tokens as f64 / words as f64;
+        total.extend([format!("{mark}{tokens}*"), format!("{mark}{ratio:.2}*")]);
+    }
+    total.extend(["0*".into(), "—*".into()]);
+    assert_eq!(matrix[4], total, "stdout: {}", r.out);
+    let stats: Vec<Vec<&str>> = r
+        .out
+        .split_once("\nstats:\n")
+        .expect("stats table")
+        .1
+        .lines()
+        .map(|line| line.split_whitespace().collect())
+        .collect();
+    assert_eq!(
+        stats,
+        [
+            vec!["FILE", "CHARS", "WORDS", "BYTES"],
+            vec!["a.txt", "6", "1", "18"],
+            vec!["b.txt", "25", "5", "25"],
+            vec!["bad.bin", "—", "—", "—"],
+            vec!["TOTAL", "31", "6", "43"],
+        ]
+    );
+}
+
 // ---- model precedence -----------------------------------------------------
 
 #[test]
@@ -402,6 +574,16 @@ fn offline_blocks_api_model() {
     assert_eq!(r.code, 1);
     assert!(r.err.contains("offline"), "stderr: {}", r.err);
     assert!(r.err.contains("anthropic"));
+    assert!(
+        r.err.contains("Re-run with network access allowed"),
+        "stderr: {}",
+        r.err
+    );
+    assert!(
+        !r.err.contains("--approx"),
+        "unusable recovery hint: {}",
+        r.err
+    );
 }
 
 #[test]
@@ -418,7 +600,16 @@ fn offline_uncached_open_weight_hints_pull() {
         None,
     );
     assert_eq!(r.code, 1);
-    assert!(r.err.contains("toknt pull"), "stderr: {}", r.err);
+    assert!(
+        r.err.contains("toknt pull some-org/not-cached"),
+        "stderr: {}",
+        r.err
+    );
+    assert!(
+        !r.err.contains("--approx"),
+        "unusable recovery hint: {}",
+        r.err
+    );
 }
 
 #[test]
@@ -431,6 +622,11 @@ fn offline_api_model_still_errors_with_approx() {
     assert!(r.out.is_empty(), "stdout: {}", r.out);
     assert!(r.err.contains("offline"), "stderr: {}", r.err);
     assert!(r.err.contains("anthropic"), "stderr: {}", r.err);
+    assert!(
+        r.err.contains("Re-run with network access allowed"),
+        "stderr: {}",
+        r.err
+    );
 }
 
 #[test]
@@ -449,7 +645,11 @@ fn offline_uncached_open_weight_still_errors_with_approx() {
     );
     assert_eq!(r.code, 1);
     assert!(r.out.is_empty(), "stdout: {}", r.out);
-    assert!(r.err.contains("toknt pull"), "stderr: {}", r.err);
+    assert!(
+        r.err.contains("toknt pull some-org/not-cached"),
+        "stderr: {}",
+        r.err
+    );
 }
 
 // ---- directory walking ----------------------------------------------------

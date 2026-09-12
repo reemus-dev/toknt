@@ -223,14 +223,19 @@ fn matrix(rep: &Report) -> u8 {
     let mut errors: Vec<(String, String)> = Vec::new();
     let cols = rep.models.len();
     let mut totals = vec![0usize; cols];
+    let mut total_words = vec![0usize; cols];
     let mut col_approx = vec![false; cols];
     let mut col_partial = vec![false; cols];
     // A representative basis/accuracy per column, from its first successful cell.
     let mut col_basis: Vec<Option<String>> = vec![None; cols];
 
-    let headers: Vec<&str> = std::iter::once("FILE")
-        .chain(rep.models.iter().map(String::as_str))
-        .collect();
+    let mut headers = vec!["FILE".to_string()];
+    for model in &rep.models {
+        headers.push(model.clone());
+        if rep.stats_on {
+            headers.push(format!("{model} TOK/WORD"));
+        }
+    }
     let mut trows: Vec<Vec<String>> = Vec::new();
 
     for row in &rep.rows {
@@ -245,11 +250,23 @@ fn matrix(rep: &Report) -> u8 {
                             Some(format!("{} ({})", label(&res.basis), label(&res.accuracy)));
                     }
                     tr.push(token_cell(res));
+                    if rep.stats_on {
+                        let words = row.stats.as_ref().map(|s| s.words).unwrap_or(0);
+                        total_words[ci] += words;
+                        tr.push(ratio_cell(
+                            res.tokens,
+                            words,
+                            res.accuracy == Accuracy::Approximate,
+                        ));
+                    }
                 }
                 Cell::Err(msg) => {
                     code = 1;
                     col_partial[ci] = true;
                     tr.push("—".into());
+                    if rep.stats_on {
+                        tr.push("—".into());
+                    }
                     errors.push((format!("{} [{}]", row.label, rep.models[ci]), msg.clone()));
                 }
             }
@@ -265,12 +282,24 @@ fn matrix(rep: &Report) -> u8 {
             cell.push('*');
         }
         total_row.push(cell);
+        if rep.stats_on {
+            let mut ratio = if col_basis[ci].is_some() {
+                ratio_cell(totals[ci], total_words[ci], col_approx[ci])
+            } else {
+                "—".into()
+            };
+            if col_partial[ci] {
+                ratio.push('*');
+            }
+            total_row.push(ratio);
+        }
     }
     trows.push(total_row);
 
     let mut aligns = vec![Align::Left];
-    aligns.extend(std::iter::repeat_n(Align::Right, cols));
-    print_table(&headers, &trows, &aligns);
+    aligns.extend(std::iter::repeat_n(Align::Right, headers.len() - 1));
+    let header_refs: Vec<&str> = headers.iter().map(String::as_str).collect();
+    print_table(&header_refs, &trows, &aligns);
 
     // Per-model basis legend; flag that mixed bases are not comparable.
     println!("\nbasis:");
@@ -399,18 +428,20 @@ fn kv(key: &str, val: &str) {
 // ---- json mode ------------------------------------------------------------
 
 fn render_json(rep: &Report) -> u8 {
+    let (doc, code) = json_report(rep);
+    println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+    code
+}
+
+fn json_report(rep: &Report) -> (Value, u8) {
     let mut code = 0u8;
     let mut results: Vec<Value> = Vec::new();
-    let cols = rep.models.len();
-    let mut totals = vec![0usize; cols];
-    let mut complete = vec![true; cols];
     let multi_input = rep.rows.len() > 1;
 
     for row in &rep.rows {
         for (ci, cell) in row.cells.iter().enumerate() {
             match cell {
                 Cell::Ok(res) => {
-                    totals[ci] += res.tokens;
                     let mut obj = serde_json::to_value(res.as_ref()).unwrap_or(Value::Null);
                     if let Value::Object(map) = &mut obj {
                         map.insert("input".into(), json!(row.label));
@@ -424,7 +455,6 @@ fn render_json(rep: &Report) -> u8 {
                 }
                 Cell::Err(msg) => {
                     code = 1;
-                    complete[ci] = false;
                     results.push(json!({
                         "input": row.label,
                         "model": rep.models[ci],
@@ -437,12 +467,41 @@ fn render_json(rep: &Report) -> u8 {
 
     let total = if multi_input {
         Value::Array(
-            (0..cols)
-                .map(|ci| {
+            rep.models
+                .iter()
+                .enumerate()
+                .map(|(ci, model)| {
+                    let mut tokens = 0;
+                    let mut complete = true;
+                    let mut bases = Vec::new();
+                    let mut accuracies = Vec::new();
+                    let mut approximations = Vec::new();
+                    for row in &rep.rows {
+                        match &row.cells[ci] {
+                            Cell::Ok(res) => {
+                                tokens += res.tokens;
+                                if !bases.contains(&res.basis) {
+                                    bases.push(res.basis);
+                                }
+                                if !accuracies.contains(&res.accuracy) {
+                                    accuracies.push(res.accuracy);
+                                }
+                                if let Some(approximation) = res.approximation {
+                                    if !approximations.contains(&approximation) {
+                                        approximations.push(approximation);
+                                    }
+                                }
+                            }
+                            Cell::Err(_) => complete = false,
+                        }
+                    }
                     json!({
-                        "model": rep.models[ci],
-                        "tokens": totals[ci],
-                        "complete": complete[ci],
+                        "model": model,
+                        "tokens": tokens,
+                        "complete": complete,
+                        "bases": bases,
+                        "accuracies": accuracies,
+                        "approximations": approximations,
                     })
                 })
                 .collect(),
@@ -451,9 +510,7 @@ fn render_json(rep: &Report) -> u8 {
         Value::Null
     };
 
-    let doc = json!({ "results": results, "total": total });
-    println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
-    code
+    (json!({ "results": results, "total": total }), code)
 }
 
 fn stats_json(stats: &Stats, tokens: usize) -> Value {
@@ -478,6 +535,14 @@ fn mark(tokens: usize, approx: bool) -> String {
     } else {
         tokens.to_string()
     }
+}
+
+fn ratio_cell(tokens: usize, words: usize, approximate: bool) -> String {
+    format!(
+        "{}{:.2}",
+        if approximate { "~" } else { "" },
+        tokens_per_word(tokens, words)
+    )
 }
 
 /// The proxy encoding name backing an approximate count (for labels).
@@ -559,4 +624,97 @@ fn print_row(cells: &[String], widths: &[usize], aligns: &[Align]) {
         }
     }
     println!("{out}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::count::Row;
+    use toknt::{ApproxReason, Approximation, ProxyEncoding, Strategy};
+
+    #[test]
+    fn json_totals_preserve_mixed_partial_and_zero_token_metadata() {
+        // A provider/proxy mixture cannot be produced deterministically by a
+        // subprocess with fixed credentials; exercise the rendered document.
+        let provider = CountResult {
+            model: "mixed".into(),
+            resolved_model: "mixed".into(),
+            strategy: Strategy::Anthropic,
+            encoding: None,
+            revision: None,
+            add_special_tokens: None,
+            basis: Basis::ContentEnvelope,
+            accuracy: Accuracy::ProviderEstimate,
+            approximation: None,
+            tokens: 10,
+        };
+        let approximation = Approximation {
+            proxy_encoding: ProxyEncoding::O200kBase,
+            reason: ApproxReason::MissingApiKey,
+        };
+        let proxy = CountResult {
+            resolved_model: "o200k_base".into(),
+            strategy: Strategy::Approx,
+            encoding: Some("o200k_base".into()),
+            basis: Basis::RawContent,
+            accuracy: Accuracy::Approximate,
+            approximation: Some(approximation),
+            tokens: 7,
+            ..provider.clone()
+        };
+        let empty = CountResult {
+            model: "empty".into(),
+            strategy: Strategy::Tiktoken,
+            accuracy: Accuracy::Exact,
+            approximation: None,
+            tokens: 0,
+            ..proxy.clone()
+        };
+        let failed = || Cell::Err("unavailable".into());
+        let rep = Report {
+            models: vec!["mixed".into(), "failed".into(), "empty".into()],
+            rows: vec![
+                vec![
+                    Cell::Ok(Box::new(provider)),
+                    failed(),
+                    Cell::Ok(Box::new(empty)),
+                ],
+                vec![Cell::Ok(Box::new(proxy.clone())), failed(), failed()],
+                vec![Cell::Ok(Box::new(proxy)), failed(), failed()],
+                vec![failed(), failed(), failed()],
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(i, cells)| Row {
+                label: format!("input-{i}"),
+                cells,
+                stats: None,
+            })
+            .collect(),
+            stats_on: false,
+        };
+
+        let (doc, code) = json_report(&rep);
+        assert_eq!(code, 1);
+        assert_eq!(
+            doc["total"],
+            json!([
+                {
+                    "model": "mixed", "tokens": 24, "complete": false,
+                    "bases": [Basis::ContentEnvelope, Basis::RawContent],
+                    "accuracies": [Accuracy::ProviderEstimate, Accuracy::Approximate],
+                    "approximations": [approximation],
+                },
+                {
+                    "model": "failed", "tokens": 0, "complete": false,
+                    "bases": [], "accuracies": [], "approximations": [],
+                },
+                {
+                    "model": "empty", "tokens": 0, "complete": false,
+                    "bases": [Basis::RawContent], "accuracies": [Accuracy::Exact],
+                    "approximations": [],
+                },
+            ])
+        );
+    }
 }

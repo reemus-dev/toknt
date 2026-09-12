@@ -89,9 +89,41 @@ available.
   `{ "results": [ { input, model, resolved_model, strategy, encoding?, basis, accuracy, approximation, tokens, stats? } ], "total": [...] | null }`.
   One result per (input × model); failed cells carry an `error` field instead of
   `tokens`. `total` is per-model and present only for multiple inputs.
+  Each total has `model`, `tokens`, `complete`, `bases`, `accuracies`, and
+  `approximations`. The three arrays contain distinct metadata from successful
+  results in first-seen order. Mixed totals retain every contributing basis and
+  accuracy; `approximations` lists each proxy encoding and reason, and is empty
+  when no approximation contributed. Totals sum the separate input counts, so
+  provider totals include an envelope for each successful input.
+  `complete: false` means failed inputs were excluded. With no successful inputs,
+  `tokens` is zero and the metadata arrays are empty; a successful zero-token
+  count still contributes its metadata.
 - **`-v/--verbose`** — a human breakdown: model, resolved target, strategy,
   basis, accuracy, approximation metadata, tokens.
 - **`--stats`** — adds chars, words, bytes, and tokens-per-word.
+  File × model matrices include a labeled `TOK/WORD` column for each model.
+  Total ratios divide summed tokens by summed words for that model's successful
+  inputs. Unavailable ratios are `—`, approximations have a `~` prefix, and
+  partial column totals have a `*` suffix.
+
+For example, a missing-key approximation over two files can produce this total:
+
+```json
+{
+  "model": "claude-opus-4-8",
+  "tokens": 411,
+  "complete": true,
+  "bases": ["raw-content"],
+  "accuracies": ["approximate"],
+  "approximations": [
+    { "proxy_encoding": "o200k_base", "reason": "missing-api-key" }
+  ]
+}
+```
+
+A mixed total can contain both `content+envelope` and `raw-content` bases, or
+multiple accuracy labels. Inspect those labels before comparing totals; they
+describe different counting bases and levels of certainty.
 
 ## Files, globs & directories
 
@@ -111,7 +143,7 @@ patterns are expanded by `toknt` and respect `--hidden`.
 `--offline` is a hard no-network contract: tiktoken still works, **cached**
 open-weight tokenizers still work, while API-backed models and **uncached**
 open-weight models error before any request — the latter with a `toknt pull`
-hint.
+hint. These offline errors remain errors when combined with `--approx`.
 
 ## Subcommands
 

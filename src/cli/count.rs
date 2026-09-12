@@ -199,8 +199,6 @@ fn approx_would_help(err: &TokntError) -> bool {
             | TokntError::UnsupportedOpenAiModel { .. }
             | TokntError::UnknownEncoding { .. }
             | TokntError::MissingApiKey { .. }
-            | TokntError::OfflineApiBlocked { .. }
-            | TokntError::OfflineCacheMiss { .. }
     )
 }
 

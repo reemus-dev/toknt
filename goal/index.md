@@ -4,6 +4,11 @@
 below is a self-contained source of truth for its run; start the matching
 session with `/goal goal/<file>`.
 
+Both goals were verified on 2026-09-12. See the committed
+[`verification.json`](../verification.json) for core proof and the
+[Goal 2 verification record](goal-2-verification.md) for CLI gates and manual
+coverage.
+
 ## 1. [`goal/task-1-core.md`](task-1-core.md) — Counting engine
 
 Build the accurate counting **core** as a Rust library and prove it across all
